@@ -1,34 +1,55 @@
-# App Name Helm Chart
+# HCP Terraform Agent Helm Chart
 
-![Downloads](https://img.shields.io/github/downloads/tonylea/helm-chart-app-name/total)
+![Downloads](https://img.shields.io/github/downloads/tonylea/helm-chart-tfc-agent/total)
 
-[One line: what the chart deploys, linked to the project, and the image it uses, linked to the image's source, with why that image (its official image, or the one the project's docs recommend).]
+Deploys the [HCP Terraform agent](https://developer.hashicorp.com/terraform/cloud-docs/agents) from its official image, [`hashicorp/tfc-agent`](https://hub.docker.com/r/hashicorp/tfc-agent), published by HashiCorp.
+The agent connects out to HCP Terraform and runs plans and applies from inside your cluster, so HCP Terraform needs no inbound access to your network.
 
-[What makes the chart opinionated, and how it runs: replicas, the update strategy and why, and where App Name keeps its data.]
+The chart is opinionated: it fixes the image, the user and most of the settings, and leaves values only for what changes with where it's installed.
+The agent runs as one replica, replaced with `Recreate` rather than rolled, because HCP Terraform's free tier allows one agent.
+A rolling update's second pod could not register while the first was still running.
+Runs are throwaway, so the agent's working directory, `/home/tfc-agent/.tfc-agent`, is an `emptyDir` and nothing persists.
+
+The agent serves no metrics endpoint, so the chart has no Service, ServiceMonitor or dashboard.
+It pushes its traces and metrics over OTLP instead, when `otlpAddress` is set.
 
 ## Values
 
-[A table of every value in `values.yaml` and its default. A value with no default says what it needs, such as "none; required" or "none; the chart creates a claim".]
-
-| Value | Default |
-| --- | --- |
+| Value            | Default                                                                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `existingSecret` | none; required. See [Requirements](#requirements).                                                                                                           |
+| `otlpAddress`    | none; the agent sends no telemetry. The `host:port` of an OTLP gRPC receiver, such as `otel-collector.monitoring.svc:4317`, set as `TFC_AGENT_OTLP_ADDRESS`. |
+| `resources`      | none. Set requests and limits from the usage you measure.                                                                                                    |
 
 ## Fixed settings
 
-[The settings the chart sets for App Name that can't be changed in its web UI, each with why. Leave this section out if there are none.]
+- **`TFC_AGENT_NAME` is the pod's name.**
+  Each agent then shows in HCP Terraform under the name of its pod.
+- **`TFC_AGENT_AUTO_UPDATE` is `disabled`.**
+  The chart pins the agent's version, and an agent updating itself would drift from it.
+- **The pod runs as non-root `999:999`**, the image's own `tfc-agent` user and group, with all capabilities dropped, privilege escalation off and the `RuntimeDefault` seccomp profile.
 
 ## Requirements
 
-[What has to exist before an install: databases, Secrets and their keys, storage classes, and the Gateway API's `HTTPRoute` CRD when `httpRoute.enabled` is set.]
+`existingSecret` names a Secret in the release's namespace with this key:
+
+| Key     | What it holds                                                                                                               |
+| ------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `token` | An [agent token](https://developer.hashicorp.com/terraform/cloud-docs/agents/agent-pools) from an HCP Terraform agent pool. |
+
+The agent exits if the token is missing, revoked or invalid, so the pod restarts until the token is valid.
 
 ## Usage
 
 ```sh
-helm repo add app-name https://tonylea.github.io/helm-chart-app-name
-helm install app-name app-name/app-name --values my-values.yaml
+helm repo add tfc-agent https://tonylea.github.io/helm-chart-tfc-agent
+helm install tfc-agent tfc-agent/tfc-agent --values my-values.yaml
 ```
 
-[An example `my-values.yaml` that sets the required values.]
+```yaml
+existingSecret: tfc-agent-token
+otlpAddress: otel-collector.monitoring.svc:4317
+```
 
 ## Development
 
@@ -36,7 +57,10 @@ Pull requests run:
 
 - `helm lint --strict`, and the rendered chart checked by kubeconform against Kubernetes 1.37.
 - helm-unittest's tests in `tests/`.
-- [An install with chart-testing in a kind cluster, and what it installs against from `ci/kind`, if anything.]
+
+There is no install test in a kind cluster.
+The agent exits without a valid HCP Terraform token, and CI never holds one, so the pod could not stay up.
+The unit tests check the security context and the working-directory mount instead.
 
 Commits follow Conventional Commits.
 Releases are versioned and tagged automatically from `main`, and published to the Helm repository on this repo's GitHub Pages.
