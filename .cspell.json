@@ -12,6 +12,9 @@
     "package-lock.json"
   ],
   "words": [
-    "kubeconform"
+    "kubeconform",
+    "nindent",
+    "otlp",
+    "trunc"
   ]
 }

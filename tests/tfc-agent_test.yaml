@@ -1,0 +1,121 @@
+suite: tfc-agent
+templates:
+  - deployment.yaml
+values:
+  - ../ci/test-values.yaml
+tests:
+  - it: runs the pinned image once, replaced rather than rolled
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: hashicorp/tfc-agent:1.33.4
+      - equal:
+          path: spec.replicas
+          value: 1
+      - equal:
+          path: spec.strategy.type
+          value: Recreate
+
+  - it: runs as the image's non-root user with a locked-down container
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            fsGroup: 999
+            seccompProfile:
+              type: RuntimeDefault
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+
+  - it: keeps the working directory on an emptyDir
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: data
+            mountPath: /home/tfc-agent/.tfc-agent
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: data
+            emptyDir: {}
+
+  - it: reads the token from the existing Secret
+    set:
+      existingSecret: agent-token
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: TFC_AGENT_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: agent-token
+                key: token
+
+  - it: names the agent after its pod and disables self-update
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: TFC_AGENT_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: TFC_AGENT_AUTO_UPDATE
+            value: disabled
+
+  - it: leaves out the OTLP address by default
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          any: true
+          content:
+            name: TFC_AGENT_OTLP_ADDRESS
+
+  - it: sets the OTLP address when given
+    set:
+      otlpAddress: otel-collector.monitoring.svc:4317
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: TFC_AGENT_OTLP_ADDRESS
+            value: otel-collector.monitoring.svc:4317
+
+  - it: sets no resources by default
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].resources
+
+  - it: sets resources when given
+    set:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 512Mi
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources
+          value:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+
+  - it: fails without existingSecret
+    set:
+      existingSecret: ""
+    asserts:
+      - failedTemplate:
+          errorMessage: existingSecret is required

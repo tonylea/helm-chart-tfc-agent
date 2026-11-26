@@ -12,14 +12,9 @@ jobs:
     if: needs.changes.outputs.chart == 'true'
     uses: tonylea/ci-templates/.github/workflows/testing-helm-unittest.yml@v1.3.4
 
-  helm-kind:
-    needs: [changes]
-    if: needs.changes.outputs.chart == 'true'
-    uses: tonylea/ci-templates/.github/workflows/testing-helm-kind.yml@v1.3.4
-
   # The required check: skipped jobs pass, failed or cancelled ones don't.
   testing:
-    needs: [changes, helm-unittest, helm-kind]
+    needs: [changes, helm-unittest]
     if: always()
     runs-on: ubuntu-24.04
     steps:

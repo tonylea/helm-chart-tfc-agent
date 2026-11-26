@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tfc-agent.fullname" . }}
+  labels:
+    {{- include "tfc-agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: tfc-agent
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "tfc-agent.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: tfc-agent
+  template:
+    metadata:
+      labels:
+        {{- include "tfc-agent.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: tfc-agent
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: tfc-agent
+          image: hashicorp/tfc-agent:{{ .Chart.AppVersion }}
+          env:
+            - name: TFC_AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "existingSecret is required" .Values.existingSecret }}
+                  key: token
+            - name: TFC_AGENT_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: TFC_AGENT_AUTO_UPDATE
+              value: disabled
+            {{- with .Values.otlpAddress }}
+            - name: TFC_AGENT_OTLP_ADDRESS
+              value: {{ . | quote }}
+            {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /home/tfc-agent/.tfc-agent
+      volumes:
+        - name: data
+          emptyDir: {}
