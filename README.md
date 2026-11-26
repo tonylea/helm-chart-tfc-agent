@@ -19,7 +19,7 @@ It pushes its traces and metrics over OTLP instead, when `otlpAddress` is set.
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `existingSecret` | none; required. See [Requirements](#requirements).                                                                                                           |
 | `otlpAddress`    | none; the agent sends no telemetry. The `host:port` of an OTLP gRPC receiver, such as `otel-collector.monitoring.svc:4317`, set as `TFC_AGENT_OTLP_ADDRESS`. |
-| `resources`      | none. Set requests and limits from the usage you measure.                                                                                                    |
+| `resources`      | none. Requests of 2m CPU and 29Mi memory are a good starting point.                                                                                          |
 
 ## Fixed settings
 
