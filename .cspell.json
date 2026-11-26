@@ -15,6 +15,7 @@
     "kubeconform",
     "nindent",
     "otlp",
+    "seccomp",
     "trunc"
   ]
 }
